@@ -167,16 +167,19 @@ class Decoder(nn.Module):
         scores = self.L_o(self.dropout(embedded_caption + self.L_h(h) + self.L_z(context_vector)))
         return scores
 
-    def forward(self, encoder_output, captions):
+    def forward(self, encoder_output, captions, lengths):
         """
         forward method to be used at training time, because it requires captions as input
 
         :param encoder_output: encoder output, a tensor with shape (batch_size, L, encoded_dim=D)
         :param captions: captions encoded, a tensor with shape (batch_size, max_caption_length)
                          ex. [<start>, w1, w2, ... , wn, <end>]
+        :param lengths: list, true length of each caption
         :return: predictions, alphas maybe?
         """
 
+        # TODO: 다시 구현 필요.
+        
         batch_size = encoder_output.shape[0]
         num_pixels = encoder_output.shape[1]
         max_caption_length = captions.shape[-1]

@@ -1,6 +1,4 @@
-# for some reason, torchvision.datasets.Flickr8k doesn't work on my data,
-# which was downloaded from https://www.kaggle.com/srbhshinde/flickr8k-sau
-# so I made my own dataloader
+
 
 import torch
 import torchvision.transforms as transforms
