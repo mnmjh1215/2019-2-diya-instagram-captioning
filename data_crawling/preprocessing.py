@@ -51,7 +51,7 @@ if __name__ == '__main__':
             key_set = set()
             
             for instance in file:
-                if instance['key'] not in key_set: #동일한 게시물 제거
+                if instance['key'] not in key_set and 'description' in instance: #동일한 게시물 제거
                     if not is_advertise(instance['description']): #광고 제거
                         hashtags = get_parsed_hashtags(instance['description']) 
                         #해시태그 없는 게시물 제거
