@@ -33,25 +33,33 @@ class DGUDataset(Dataset):
         json_file: path to json file
         vocab: dictionary object. must include <PAD>, <UNK>, <start>, <end> as its keys.
         transform: transform to be applied to image
-        type: 'hashtag' or 'caption'
-        tokenize_fn: function that is used to tokenize text when type is 'caption'
+        type: 'hashtag' or 'text'
+        tokenize_fn: function that is used to tokenize text when type is 'text'
         """
+        
         assert any(json_file.endswith(file_type) for file_type in ['total.json', 'train.json', 'val.json', 'test.json'])
-        assert type in ['hashtag', 'caption']
+        assert type in ['hashtag', 'text']
         assert '<UNK>' in vocab
         assert '<start>' in vocab
         assert '<end>' in vocab
         
-        if type == 'caption':
+        if type == 'text':
             assert tokenize_fn is not None
         self.vocab = vocab
+        
         with open(json_file) as fr:
+            # remove empty data
             d = json.load(fr)
             self.json = []
             for item in d:
-                target = [t for t in item[type] if t in self.vocab]
+                if type not in item:
+                    continue
+                if type == 'text':
+                    target = [token for token in tokenize_fn(item['text']) if token in self.vocab]
+                else:
+                    target = [t for t in item['hashtag'] if t in self.vocab]
                 if target != []:
-                    self.json.append(target)
+                    self.json.append(item)
             
         self.root_dir = '/'.join(json_file.split('/')[:-1])
         self.type = type
@@ -63,12 +71,12 @@ class DGUDataset(Dataset):
     def __getitem__(self, index):
         item = self.json[index]
         
-        # load target = hashtag or caption
+        # load target = hashtag or text
         if self.type == 'hashtag':
             hashtags = item['hashtag']
             # 해시태그의 경우, vocab에 존재하지 않으면 그냥 무시
             target = [self.vocab.get(hashtag) for hashtag in hashtags if hashtag in self.vocab]
-        elif self.type == 'caption':
+        elif self.type == 'text':
             text = item['text']
             tokens = self.tokenize_fn(text)
             UNK_idx = self.vocab['<UNK>']

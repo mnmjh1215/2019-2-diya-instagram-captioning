@@ -19,7 +19,14 @@ class Config:
 
     # dataloader
     batch_size = 32
+    num_workers = 4
 
     # train
     num_epochs = 40
     log_freq = 100
+    validation_freq = 3
+    patience = 5
+
+
+class ShowAttConfig(Config):
+    checkpoint_path = "ShowAtt.pth"

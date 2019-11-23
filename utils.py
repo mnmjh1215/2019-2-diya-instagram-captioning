@@ -31,7 +31,7 @@ class OktDetokenizer:
                 jTokens.add(token.split('/')[0])
                 
         return self.processor.detokenize(jTokens)
-        
+    
 
 def generate_vocab(words, min_freq=5):
     """

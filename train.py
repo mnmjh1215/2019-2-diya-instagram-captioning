@@ -6,23 +6,18 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from config import Config
-
-
-# TODO
-
 
 class Trainer:
     """
     Trainer for encoder and decoder
     """
 
-    def __init__(self, encoder, decoder, dataloader, config):
+    def __init__(self, encoder, decoder, dataloader, val_dataloader, config):
         """
         encoder: Encoder module
         decoder: Decoder module
         dataloader: instance of torch.utils.data.DataLoader
-        config: Config instance containing learning rates and other hyperparameters
+        config: config containing learning rates and other hyperparameters
         """
         # TODO
         self.config = config
@@ -31,6 +26,7 @@ class Trainer:
         self.encoder = encoder.to(self.device)
         self.decoder = decoder.to(self.device)
         self.dataloader = dataloader
+        self.val_dataloader = val_dataloader
 
         encoder_params = list(filter(lambda p: p.requires_grad, encoder.parameters()))
         decoder_params = list(filter(lambda p: p.requires_grad, decoder.parameters()))
@@ -44,6 +40,10 @@ class Trainer:
         self.curr_epoch = 0
         
         self.log_freq = config.log_freq
+        self.validation_freq = config.validation_freq
+        
+        self.best_val_loss = 10000
+        
         
     def train(self, num_epochs):
         for epoch in range(self.curr_epoch, num_epochs):
@@ -58,7 +58,7 @@ class Trainer:
                 epoch_loss += loss
                 
                 if (ix + 1) % self.log_freq == 0:
-                    print("[{0}/{1}] loss: {2}".format(epoch+1, num_epochs, epoch_loss / (ix + 1)))
+                    print("[{0}/{1}] loss: {2:.4f}".format(epoch+1, num_epochs, epoch_loss / (ix + 1)))
 
 
             # end of epoch
@@ -66,6 +66,13 @@ class Trainer:
                                                                epoch_loss / (ix + 1)))
                   
             self.curr_epoch += 1
+            
+            if self.curr_epoch % self.validation_freq == 0:
+                val_loss = self.validate()
+                print("epoch {0}, validation loss: {1:.4f}".format(self.curr_epoch, val_loss))
+                if val_loss < self.best_val_loss:
+                    self.best_val_loss = val_loss
+                    self.save(self.config.checkpoint_path)
             
     def train_step(self, images, targets, lengths):
         
@@ -88,7 +95,47 @@ class Trainer:
         
         return ce_loss.item()
         
+    def validate(self):
+        self.encoder.eval()
+        self.decoder.eval()
         
+        total_loss = 0
+        with torch.no_grad():
+            for ix, (images, targets, lengths) in enumerate(self.val_dataloader):
+                images = images.to(self.device)
+                targets = targets.to(self.device)
+                
+                encoded_images = self.encoder(images)
+                predictions, alphas = self.decoder(encoded_images, targets)
+                predictions = predictions.transpose(1, 2)  # (batch_size, length, C) -> (batch_size, C, length)
+                
+                targets = targets[:, 1:]
+                mask = (targets > 0).type_as(targets)
+                
+                ce_loss = self.criterion(predictions, targets)
+                ce_loss = ((ce_loss * mask) / mask.sum()).sum()
+                
+                total_loss += ce_loss.item()
+                
+        self.encoder.train()
+        self.decoder.train()
+        
+        return total_loss / (ix + 1)
 
-            
+    def save(self, savepath):
+        torch.save({
+                'encoder_state_dict': self.encoder.state_dict(),
+                'decoder_state_dict': self.decoder.state_dict(),
+                'optimizer_state_dict': self.optimizer.state_dict(),
+                'epoch': self.curr_epoch,
+                'loss_hist': self.loss_hist,
+            }, savepath)
+        
     
+    def load(self, loadpath):
+        checkpoint = torch.load(loadpath)
+        self.encoder.load_state_dict(checkpoint['encoder_state_dict'])
+        self.decoder.load_state_dict(checkpoint['decoder_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.curr_epoch = checkpoint['epoch']
+        self.loss_hist = checkpoint['loss_hist']
