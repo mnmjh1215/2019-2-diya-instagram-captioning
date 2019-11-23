@@ -10,6 +10,7 @@ import subprocess
 import jpype
 import json
 from konlpy import jvm
+from collections import Counter
 
 
 class OktDetokenizer:
@@ -32,26 +33,21 @@ class OktDetokenizer:
         return self.processor.detokenize(jTokens)
         
 
-def generate_vocab(json_file):
+def generate_vocab(words, min_freq=5):
     """
+    words: list of all words appearance
     returns a dictionary, contatining (word, idx) pairs for every word used in caption file
     """
     word2id = {'<PAD>': 0, '<UNK>': 1, '<start>': 2, '<end>': 3}
     idx = len(word2id)
-    with open(json_file) as fr:
-        item_list = json.load(fr)
-        # TODO: generate vocab with given json_file
+    counter = Counter(words)
+    for word, count in counter.most_common():
+        if count < min_freq:
+            break
+        word2id[word] = idx
+        idx += 1
+    
     return word2id
-
-
-def load_pretrained_embedding(pretrained_path, word2id, embed_size=300):
-    vocab_size = len(word2id)
-    embedding = torch.randn((vocab_size, embed_size))
-    with open(pretrained_path) as fr:
-        # TODO: 한국어 pretrained embedding을 잘 불러오기!
-        pass
-
-    return embedding
 
 
 def beam_search(decoder, encoder_output, beam_size=3):

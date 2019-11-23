@@ -7,6 +7,9 @@ from PIL import Image
 import os
 import json
 
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
 from config import Config
 
 
@@ -35,13 +38,25 @@ class DGUDataset(Dataset):
         """
         assert any(json_file.endswith(file_type) for file_type in ['total.json', 'train.json', 'val.json', 'test.json'])
         assert type in ['hashtag', 'caption']
+        assert '<UNK>' in vocab
+        assert '<start>' in vocab
+        assert '<end>' in vocab
+        
         if type == 'caption':
             assert tokenize_fn is not None
+        self.vocab = vocab
         with open(json_file) as fr:
-            self.json = json.load(fr)
+            d = json.load(fr)
+            self.json = []
+            for item in d:
+                target = [t for t in item[type] if t in self.vocab]
+                if target != []:
+                    self.json.append(target)
+            
         self.root_dir = '/'.join(json_file.split('/')[:-1])
         self.type = type
         self.vocab = vocab
+        
         self.transform = transform
         self.tokenize_fn = tokenize_fn
                 
@@ -62,7 +77,7 @@ class DGUDataset(Dataset):
         target = torch.LongTensor(target)
         
         # load image
-        image = Image.open(os.path.join(self.root_dir, item['image_path'])).convert('RGB')
+        image = Image.open(os.path.join(self.root_dir, item['image_path']))
         if self.transform is not None:
             image = self.transform(image)
             
@@ -91,15 +106,15 @@ def collate_fn(data):
 
     # Merge targets (from tuple of 1D tensor to 2D tensor).
     lengths = [len(cap) for cap in targets]
-    targets = torch.zeros(len(targets), max(lengths)).long()
+    padded_targets = torch.zeros(len(targets), max(lengths)).long()
     for i, cap in enumerate(targets):
         end = lengths[i]
-        targets[i, :end] = cap[:end]        
-    return images, targets, lengths
+        padded_targets[i, :end] = cap[:end]        
+    return images, padded_targets, lengths
 
 
 def get_dataloader(json_file, vocab, transform=default_transform, type='hashtag', tokenize_fn=None,
-                   batch_size=Config.batch_size, shuffle=True, num_workers=-1):
+                   batch_size=32, shuffle=True, num_workers=-1):
     
     dataset = DGUDataset(json_file, vocab, transform=transform, type=type, tokenize_fn=tokenize_fn)
     

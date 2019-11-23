@@ -167,7 +167,7 @@ class Decoder(nn.Module):
         scores = self.L_o(self.dropout(embedded_caption + self.L_h(h) + self.L_z(context_vector)))
         return scores
 
-    def forward(self, encoder_output, captions, lengths):
+    def forward(self, encoder_output, captions):
         """
         forward method to be used at training time, because it requires captions as input
 
@@ -203,7 +203,7 @@ class Decoder(nn.Module):
 
         return predictions, alphas
 
-    def generate_caption_greedily(self, encoder_output):
+    def generate_caption_greedily(self, encoder_output, start_token, end_token):
         """
         greedily generate captions for encoded images.
 
@@ -212,9 +212,9 @@ class Decoder(nn.Module):
         """
         # TODO
         h, c = self.init_hidden_states(encoder_output)
-        captions = [0]  # 0 is <start>
+        captions = [start_token]
         alphas = []
-        while captions[-1] != 1 and len(captions) < 30:  # 1 is '.'
+        while captions[-1] != end_token and len(captions) < 30:  # 1 is '.'
             caption = captions[-1]
             embedded_caption = self.embedding(torch.LongTensor([caption]))  # (1, embed_dim)
             context_vector, alpha = self.attention(encoder_output, h)  # (1, encoder_dim)
