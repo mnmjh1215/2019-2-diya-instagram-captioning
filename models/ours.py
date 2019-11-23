@@ -1,14 +1,11 @@
 # Endocder, Attention and Decoder
-# Show, Attend and Tell
+# Ours
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import torchvision.models as tvmodels
-
-
-class Encoder(nn.Module):
+class ResNextEncoder(nn.Module):
     """
     An encoder that encodes each input image to tensor with shape (L, D)
     resnet101 is used for pretrained convolutional network.
@@ -23,15 +20,14 @@ class Encoder(nn.Module):
 
         self.encoded_size = encoded_size
 
-        resnet101 = tvmodels.resnet101(pretrained=True)
-        layers_to_use = list(resnet101.children())[:-3]
+        resnext_wsl = torch.hub.load('facebookresearch/WSL-Images', 'resnext101_32x8d_wsl')
+        layers_to_use = list(resnext_wsl.children())[:-3]
 
         self.conv_net = nn.Sequential(*layers_to_use)
 
         self.adaptive_pool = nn.AdaptiveAvgPool2d((encoded_size, encoded_size))
 
         self.encoder_finetune = encoder_finetune
-        
         if not encoder_finetune:
             self.conv_net.eval()
 
@@ -58,7 +54,7 @@ class Encoder(nn.Module):
         return x
 
 
-class Attention(nn.Module):
+class LookBackAttention(nn.Module):
     """
     Deterministic "soft" attention, which is differentiable and thus can be learned by backpropagation
     """
@@ -71,14 +67,14 @@ class Attention(nn.Module):
         """
         super().__init__()
         self.encoder_attention = nn.Linear(encoder_dim, attention_dim)
-        self.decoder_attention = nn.Linear(decoder_dim, attention_dim)
+        self.decoder_context_vector_attention = nn.Linear(decoder_dim + encoder_dim, attention_dim)
         self.attention = nn.Linear(attention_dim, 1)
         self.softmax = nn.Softmax(dim=1)
 
-    def forward(self, encoder_output, decoder_hidden):
+    def forward(self, encoder_output, decoder_hidden, context_vector):
         encoder_att = self.encoder_attention(encoder_output)  # (batch_size, L, attention_dim)
-        decoder_att = self.decoder_attention(decoder_hidden)  # (batch_size, attention_dim)
-        encoder_plus_decoder_att = encoder_att + decoder_att.unsqueeze(1)  # (batch_size, L, attention_dim)
+        decoder_context_vector_att = self.decoder_attention(torch.cat([decoder_hidden, context_vector]))  # (batch_size, attention_dim)
+        encoder_plus_decoder_att = encoder_att + decoder_context_vector_att.unsqueeze(1)  # (batch_size, L, attention_dim)
         attention = self.attention(F.relu(encoder_plus_decoder_att)).squeeze(2)  # (batch_size, L)
         alpha = self.softmax(attention)  # (batch_size, L)
         context_vector = (encoder_output * alpha.unsqueeze(2)).sum(dim=1)  # (batch_size, encoder_dim)
@@ -88,7 +84,7 @@ class Attention(nn.Module):
         return context_vector, alpha  # keep alpha for visualization?
 
 
-class Decoder(nn.Module):
+class LookBackDecoder(nn.Module):
     """
     Decoder with attention
     """
@@ -113,7 +109,7 @@ class Decoder(nn.Module):
         self.vocab_size = vocab_size
         self.dropout_rate = dropout
 
-        self.attention = Attention(encoder_dim, decoder_dim, attention_dim)
+        self.look_back_attention = LookBackAttention(encoder_dim, decoder_dim, attention_dim)
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)
 
@@ -193,7 +189,7 @@ class Decoder(nn.Module):
 
         for t in range(max_caption_length - 1):  # don't need prediction when y_t-1 is <end>
             embedded_caption_t = embedded_captions[:, t, :]  # (batch_size, embed_dim)
-            context_vector, alpha = self.attention(encoder_output, h)
+            context_vector, alpha = self.look_back_attention(encoder_output, h, context_vector)
             # context vector has size (batch_size, encoder_dim)
             h, c = self.lstm(torch.cat([embedded_caption_t, context_vector], dim=1),  # lstm input has shape (batch_size, embed_dim + encoder_dim)
                              (h, c))
@@ -217,7 +213,7 @@ class Decoder(nn.Module):
         while captions[-1] != end_token and len(captions) < 30:  # 1 is '.'
             caption = captions[-1]
             embedded_caption = self.embedding(torch.LongTensor([caption]))  # (1, embed_dim)
-            context_vector, alpha = self.attention(encoder_output, h)  # (1, encoder_dim)
+            context_vector, alpha = self.look_back_attention(encoder_output, h, context_vector)  # (1, encoder_dim)
             h, c = self.lstm(torch.cat([embedded_caption, context_vector], dim=1),
                              (h, c))
             preds = self.deep_output_layer(embedded_caption, h, context_vector)  # (1, vocab_size)
@@ -226,5 +222,3 @@ class Decoder(nn.Module):
             alphas.append(alpha)
 
         return captions, alphas
-            
-
