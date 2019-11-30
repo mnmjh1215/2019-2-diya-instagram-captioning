@@ -23,10 +23,14 @@ class Config:
 
     # train
     num_epochs = 40
-    log_freq = 100
-    validation_freq = 3
+    log_every = 100
+    validation_freq = 1
     patience = 5
 
 
 class ShowAttConfig(Config):
-    checkpoint_path = "ShowAtt.pth"
+    checkpoint_path = "checkpoint/showatt.pth"
+
+
+class OursConfig(Config):
+    checkpoint_path = "checkpoint/ours.pth"

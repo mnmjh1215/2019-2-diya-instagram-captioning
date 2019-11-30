@@ -39,13 +39,13 @@ class Trainer:
         self.loss_hist = []
         self.curr_epoch = 0
         
-        self.log_freq = config.log_freq
+        self.log_every = config.log_every
         self.validation_freq = config.validation_freq
         
         self.best_val_loss = 10000
         
         
-    def train(self, num_epochs):
+    def train(self, num_epochs, checkpoint_path):
         for epoch in range(self.curr_epoch, num_epochs):
             epoch_loss = 0
 
@@ -57,7 +57,7 @@ class Trainer:
                 loss = self.train_step(images, targets, lengths)
                 epoch_loss += loss
                 
-                if (ix + 1) % self.log_freq == 0:
+                if (ix + 1) % self.log_every == 0:
                     print("[{0}/{1}] loss: {2:.4f}".format(epoch+1, num_epochs, epoch_loss / (ix + 1)))
 
 
@@ -72,7 +72,7 @@ class Trainer:
                 print("epoch {0}, validation loss: {1:.4f}".format(self.curr_epoch, val_loss))
                 if val_loss < self.best_val_loss:
                     self.best_val_loss = val_loss
-                    self.save(self.config.checkpoint_path)
+                    self.save(checkpoint_path)
             
     def train_step(self, images, targets, lengths):
         
