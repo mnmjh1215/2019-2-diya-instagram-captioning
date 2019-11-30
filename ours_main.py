@@ -24,8 +24,8 @@ def main(args):
     if args.mode == 'train':
         okt = Okt()
         def tokenize_fn(text):
-            tokens = okt.pos(text, norm=True)
-            return ['/'.join(token) for token in tokens]
+            tokens = okt.pos(text, norm=True, join=True)
+            return tokens
         
         if args.vocab_file:
             with open(args.vocab_file) as fr:
