@@ -28,7 +28,8 @@ class DGUDataset(Dataset):
     """
     Custom dataset designed to load DGU Dataset using either one of ['total.json', 'train.json', 'val.json', 'test.json']
     """
-    def __init__(self, json_file, vocab, transform=default_transform, type='hashtag', tokenize_fn=None):
+    def __init__(self, json_file, vocab, transform=default_transform, type='hashtag', tokenize_fn=None,
+                 on_ram=False):
         """
         json_file: path to json file
         vocab: dictionary object. must include <PAD>, <UNK>, <start>, <end> as its keys.
@@ -67,6 +68,16 @@ class DGUDataset(Dataset):
         
         self.transform = transform
         self.tokenize_fn = tokenize_fn
+        self.on_ram = on_ram
+        
+        # 이미지를 미리 불러온다
+        if self.on_ram:
+            self.images = []
+            for item in self.json:
+                image = Image.open(os.path.join(self.root_dir, item['image_path']))
+                if self.transform is not None:
+                    image = self.transform(image)
+                images.append(image)
                 
     def __getitem__(self, index):
         item = self.json[index]
@@ -85,9 +96,12 @@ class DGUDataset(Dataset):
         target = torch.LongTensor(target)
         
         # load image
-        image = Image.open(os.path.join(self.root_dir, item['image_path']))
-        if self.transform is not None:
-            image = self.transform(image)
+        if self.on_ram:
+            image = self.images[index]
+        else:
+            image = Image.open(os.path.join(self.root_dir, item['image_path']))
+            if self.transform is not None:
+                image = self.transform(image)
             
         return image, target
     
@@ -122,9 +136,9 @@ def collate_fn(data):
 
 
 def get_dataloader(json_file, vocab, transform=default_transform, type='hashtag', tokenize_fn=None,
-                   batch_size=32, shuffle=True, num_workers=-1):
+                   batch_size=32, shuffle=True, num_workers=-1, on_ram=False):
     
-    dataset = DGUDataset(json_file, vocab, transform=transform, type=type, tokenize_fn=tokenize_fn)
+    dataset = DGUDataset(json_file, vocab, transform=transform, type=type, tokenize_fn=tokenize_fn, on_ram=on_ram)
     
     loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, collate_fn=collate_fn)
     
