@@ -77,7 +77,7 @@ class DGUDataset(Dataset):
                 image = Image.open(os.path.join(self.root_dir, item['image_path']))
                 if self.transform is not None:
                     image = self.transform(image)
-                images.append(image)
+                self.images.append(image)
                 
     def __getitem__(self, index):
         item = self.json[index]
