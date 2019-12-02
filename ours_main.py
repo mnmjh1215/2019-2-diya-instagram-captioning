@@ -4,7 +4,7 @@ from models.ours import ResNextEncoder, LookBackDecoder
 from train import Trainer
 from dataloader import get_dataloader
 from config import ShowAttConfig as Config
-from utils import generate_vocab, OktDetokenizer, load_model
+from utils import generate_vocab, OktDetokenizer, load_model, load_pretrained_embedding
 from konlpy.tag import Okt
 
 import json
@@ -42,10 +42,11 @@ def main(args):
                     else:
                         tokens = tokenize_fn(item['text'])
                         targets.extend(tokens)
-            if args.target_type == 'hashtag':
-                vocab = generate_vocab(targets, Config.min_hashtag_freq)
-            elif args.target_type == 'text':
+            if args.target_type == 'text':
                 vocab = generate_vocab(targets, Config.min_text_freq)
+            else:
+                vocab = generate_vocab(targets, Config.min_hashtag_freq)
+                
             with open(args.target_type + "_vocab.json", "w") as fw:
                 json.dump(vocab, fw)
         
@@ -62,6 +63,10 @@ def main(args):
         encoder = ResNextEncoder(Config.encoded_size)
         decoder = LookBackDecoder(Config.encoder_dim, Config.decoder_dim, Config.attention_dim, Config.embed_dim, len(vocab))
         
+        if args.target_type == 'text':
+            # load pretrained embedding
+            decoder.load_embedding(load_pretrained_embedding(vocab).to(Config.device))
+        
         # prepare trainer
         trainer = Trainer(encoder, decoder, train_dataloader, val_dataloader, Config)
         if args.checkpoint_load_path:
@@ -69,7 +74,7 @@ def main(args):
             trainer.load(args.checkpoint_load_path)
             
         # train!
-        print("Start Training using device {0}".format(Config.device))
+        print("Start Training using device {0}".format(Config.device))      
         if not os.path.isdir(os.path.dirname(args.checkpoint_save_path)):
             os.makedirs(os.path.dirname(args.checkpoint_save_path))
         trainer.train(args.num_epochs, args.checkpoint_save_path)

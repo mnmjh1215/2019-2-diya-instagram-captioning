@@ -71,6 +71,7 @@ class Trainer:
                 val_loss = self.validate()
                 print("epoch {0}, validation loss: {1:.4f}, {2:.4f} seconds".format(self.curr_epoch, val_loss, time.time() - val_start))
                 if val_loss < self.best_val_loss:
+                    print("Best validation loss, saving model...")
                     self.best_val_loss = val_loss
                     self.save(checkpoint_path)
             
@@ -82,10 +83,11 @@ class Trainer:
         predictions, alphas = self.decoder(encoded_images, targets)
         predictions = predictions.transpose(1, 2)  # (batch_size, length, C) -> (batch_size, C, length)
         
-        targets = targets[:, 1:]
-        mask = (targets > 0).type_as(targets)
+        targets = targets[:, 1:]        
+        targets = targets.to(self.device)
         
         ce_loss = self.criterion(predictions, targets)
+        mask = (targets > 0).type_as(ce_loss)
         ce_loss = ((ce_loss * mask) / mask.sum()).sum()
         
         ce_loss.backward()
@@ -110,9 +112,10 @@ class Trainer:
                 predictions = predictions.transpose(1, 2)  # (batch_size, length, C) -> (batch_size, C, length)
                 
                 targets = targets[:, 1:]
-                mask = (targets > 0).type_as(targets)
+                targets = targets.to(self.device)
                 
                 ce_loss = self.criterion(predictions, targets)
+                mask = (targets > 0).type_as(ce_loss)
                 ce_loss = ((ce_loss * mask) / mask.sum()).sum()
                 
                 total_loss += ce_loss.item()

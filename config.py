@@ -28,8 +28,8 @@ class Config:
     min_hashtag_freq = 2
 
     # train
-    num_epochs = 30
-    log_every = 1
+    num_epochs = 40
+    log_every = 30
     validation_freq = 1
     patience = 5
 

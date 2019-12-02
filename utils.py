@@ -50,9 +50,31 @@ def generate_vocab(words, min_freq=5):
     return word2id
 
 
-def beam_search(decoder, encoder_output, beam_size=3):
-    # TODO
-    pass
+def load_pretrained_embedding(vocab):
+    # load fasttext cc pretraiend word embedding
+    if not os.path.isfile('embedding/wiki.ko.vec'):
+        if not os.path.isdir('embedding'):
+            os.mkdir('embedding')
+        subprocess.run(['wget', '--show-progress', '-P', 'embedding', 'https://dl.fbaipublicfiles.com/fasttext/vectors-wiki/wiki.ko.vec', ])
+
+    word2idx = dict([(word.split('/')[0], idx) for word, idx in vocab.items()])
+    
+    with open('embedding/wiki.ko.vec') as fr:
+        embed_vocab_size, embed_dim = map(int, fr.readline().split())
+        embedding_mat = np.random.randn(len(vocab), embed_dim)
+        count = 0
+        for line in fr:
+            line = line.split()
+            token = line[0]
+            if token in word2idx:
+                index = word2idx[token]
+                vector = np.asarray(list(map(float, line[1:])))
+                embedding_mat[index] = vector
+                count += 1
+            
+    print('{0} / {1} word vectors updated'.format(count, len(vocab)))
+        
+    return torch.FloatTensor(embedding_mat)
 
 
 def load_model(encoder, decoder, checkpoint_path):

@@ -212,7 +212,7 @@ class LookBackDecoder(nn.Module):
         alphas = []
         while captions[-1] != end_token and len(captions) < 30:  # 1 is '.'
             caption = captions[-1]
-            embedded_caption = self.embedding(torch.LongTensor([caption]))  # (1, embed_dim)
+            embedded_caption = self.embedding(torch.LongTensor([caption]).to(self.device))  # (1, embed_dim)
             context_vector, alpha = self.look_back_attention(encoder_output, h, context_vector)  # (1, encoder_dim)
             h, c = self.lstm(torch.cat([embedded_caption, context_vector], dim=1),
                              (h, c))
