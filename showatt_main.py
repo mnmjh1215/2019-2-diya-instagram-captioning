@@ -66,7 +66,7 @@ def main(args):
             trainer.load(args.checkpoint_load_path)
             
         # train!
-        print("Start Training")
+        print("Start Training using device {0}".format(Config.device))      
         if not os.path.isdir(os.path.dirname(args.checkpoint_save_path)):
             os.makedirs(os.path.dirname(args.checkpoint_save_path))
         trainer.train(args.num_epochs, args.checkpoint_save_path)
@@ -106,6 +106,7 @@ def get_args():
     
     parser.add_argument('--num_epochs',
                         default=Config.num_epochs,
+                        type=int,
                         help="number of epochs to train")
     
     parser.add_argument('--load_image_on_ram',

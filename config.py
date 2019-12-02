@@ -20,10 +20,16 @@ class Config:
     # dataloader
     batch_size = 32
     num_workers = 4
+    max_text_length = 30
+    max_hashtag_length = 25
+    
+    # generating vocab
+    min_text_freq = 1
+    min_hashtag_freq = 2
 
     # train
-    num_epochs = 40
-    log_every = 100
+    num_epochs = 30
+    log_every = 1
     validation_freq = 1
     patience = 5
 

@@ -47,20 +47,6 @@ class DGUDataset(Dataset):
         if type == 'text':
             assert tokenize_fn is not None
         self.vocab = vocab
-        
-        with open(json_file) as fr:
-            # remove empty data
-            d = json.load(fr)
-            self.json = []
-            for item in d:
-                if type not in item:
-                    continue
-                if type == 'text':
-                    target = [token for token in tokenize_fn(item['text']) if token in self.vocab]
-                else:
-                    target = [t for t in item['hashtag'] if t in self.vocab]
-                if target != []:
-                    self.json.append(item)
             
         self.root_dir = '/'.join(json_file.split('/')[:-1])
         self.type = type
@@ -70,6 +56,42 @@ class DGUDataset(Dataset):
         self.tokenize_fn = tokenize_fn
         self.on_ram = on_ram
         
+        with open(json_file) as fr:
+            # remove empty data
+            d = json.load(fr)
+            self.json = []
+            for item in d:
+                if type not in item:
+                    continue
+                if type == 'text':
+                    # vocab에 포함되는 단어가 없으면 데이터셋에 포함하지 않음
+                    target = [token for token in tokenize_fn(item['text']) if token in self.vocab]
+                else:
+                    target = [t for t in item['hashtag'] if t in self.vocab]
+                if target != []:
+                    # 길이가 너무 큰 타겟 제외...
+                    if type == 'text':
+                        if len(target) > Config.max_text_length:
+                            continue
+                    elif type == 'hashtag':
+                        if len(target) > Config.max_hashtag_length:
+                            continue
+                    self.json.append(item)
+                    
+        # target 미리 생성
+        self.targets = []
+        for item in self.json:
+            if type == 'text':
+                text = item['text']
+                tokens = self.tokenize_fn(text)
+                UNK_idx = self.vocab['<UNK>']
+                target = [self.vocab.get(token, UNK_idx) for token in tokens]
+            elif type == 'hashtag':
+                # 해시태그의 경우, vocab에 존재하지 않으면 그냥 무시
+                hashtags = item['hashtag']
+                target = [self.vocab.get(hashtag) for hashtag in hashtags if hashtag in self.vocab]
+            self.targets.append(target)
+        
         # 이미지를 미리 불러온다
         if self.on_ram:
             self.images = []
@@ -78,20 +100,12 @@ class DGUDataset(Dataset):
                 if self.transform is not None:
                     image = self.transform(image)
                 self.images.append(image)
-                
+                    
     def __getitem__(self, index):
         item = self.json[index]
         
         # load target = hashtag or text
-        if self.type == 'hashtag':
-            hashtags = item['hashtag']
-            # 해시태그의 경우, vocab에 존재하지 않으면 그냥 무시
-            target = [self.vocab.get(hashtag) for hashtag in hashtags if hashtag in self.vocab]
-        elif self.type == 'text':
-            text = item['text']
-            tokens = self.tokenize_fn(text)
-            UNK_idx = self.vocab['<UNK>']
-            target = [self.vocab.get(token, UNK_idx) for token in tokens]
+        target = self.targets[index]
         target = [self.vocab.get('<start>')] + target + [self.vocab.get('<end>')]
         target = torch.LongTensor(target)
         

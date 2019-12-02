@@ -58,8 +58,7 @@ class Trainer:
                 epoch_loss += loss
                 
                 if (ix + 1) % self.log_every == 0:
-                    print("[{0}/{1}] loss: {2:.4f}".format(epoch+1, num_epochs, epoch_loss / (ix + 1)))
-
+                    print("[{0}/{1}] loss: {2:.4f}, {3:.4f}".format(epoch+1, num_epochs, epoch_loss / (ix + 1), time.time() - start))
 
             # end of epoch
             print("epoch {0} {1:.4f} seconds, loss: {2:.4f}".format(epoch + 1, time.time() - start,
@@ -68,8 +67,9 @@ class Trainer:
             self.curr_epoch += 1
             
             if self.curr_epoch % self.validation_freq == 0:
+                val_start = time.time()
                 val_loss = self.validate()
-                print("epoch {0}, validation loss: {1:.4f}".format(self.curr_epoch, val_loss))
+                print("epoch {0}, validation loss: {1:.4f}, {2:.4f} seconds".format(self.curr_epoch, val_loss, time.time() - val_start))
                 if val_loss < self.best_val_loss:
                     self.best_val_loss = val_loss
                     self.save(checkpoint_path)

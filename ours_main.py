@@ -42,7 +42,10 @@ def main(args):
                     else:
                         tokens = tokenize_fn(item['text'])
                         targets.extend(tokens)
-            vocab = generate_vocab(targets, 1)
+            if args.target_type == 'hashtag':
+                vocab = generate_vocab(targets, Config.min_hashtag_freq)
+            elif args.target_type == 'text':
+                vocab = generate_vocab(targets, Config.min_text_freq)
             with open(args.target_type + "_vocab.json", "w") as fw:
                 json.dump(vocab, fw)
         
@@ -66,7 +69,7 @@ def main(args):
             trainer.load(args.checkpoint_load_path)
             
         # train!
-        print("Start Training")
+        print("Start Training using device {0}".format(Config.device))
         if not os.path.isdir(os.path.dirname(args.checkpoint_save_path)):
             os.makedirs(os.path.dirname(args.checkpoint_save_path))
         trainer.train(args.num_epochs, args.checkpoint_save_path)
@@ -106,6 +109,7 @@ def get_args():
     
     parser.add_argument('--num_epochs',
                         default=Config.num_epochs,
+                        type=int,
                         help="number of epochs to train")
     
     parser.add_argument('--load_image_on_ram',
