@@ -1,7 +1,26 @@
 import numpy as np
+from nltk.translate.bleu_score import sentence_bleu, corpus_bleu
 
 
+def bleu(actuals, predictions, n=1):
+    """
+    :param actuals: list of list of actual targets (texts or hashtags), <start>, <end> 제거
+    :param predictions: list of list of predicted targets, <start>, <end> 제거
+    :param avg: average method
+    :return: macro_averaged bleu score
+    """
+    
+    weights = tuple([1/n] * n)
 
+    scores = []
+    for actual, pred in zip(actuals, predictions):
+        # actual과 pred 중 n보다 길이가 더 작은 문장이 있다면, 스킵
+        if min(len(actual), len(pred)) < n:
+            continue
+        score = sentence_bleu([actual], pred, weights=weights)
+        scores.append(score)
+    return sum(scores) / len(scores)
+        
 
 
 def precision(actual, prediction, start_token_index=2, end_token_index=3):

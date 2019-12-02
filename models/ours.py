@@ -73,7 +73,7 @@ class LookBackAttention(nn.Module):
 
     def forward(self, encoder_output, decoder_hidden, context_vector):
         encoder_att = self.encoder_attention(encoder_output)  # (batch_size, L, attention_dim)
-        decoder_context_vector_att = self.decoder_attention(torch.cat([decoder_hidden, context_vector]))  # (batch_size, attention_dim)
+        decoder_context_vector_att = self.decoder_context_vector_attention(torch.cat([decoder_hidden, context_vector], dim=1))  # (batch_size, attention_dim)
         encoder_plus_decoder_att = encoder_att + decoder_context_vector_att.unsqueeze(1)  # (batch_size, L, attention_dim)
         attention = self.attention(F.relu(encoder_plus_decoder_att)).squeeze(2)  # (batch_size, L)
         alpha = self.softmax(attention)  # (batch_size, L)
@@ -187,6 +187,8 @@ class LookBackDecoder(nn.Module):
 
         h, c = self.init_hidden_states(encoder_output)
 
+        # initial context vector
+        context_vector = encoder_output.mean(dim=1)
         for t in range(max_caption_length - 1):  # don't need prediction when y_t-1 is <end>
             embedded_caption_t = embedded_captions[:, t, :]  # (batch_size, embed_dim)
             context_vector, alpha = self.look_back_attention(encoder_output, h, context_vector)
@@ -210,6 +212,9 @@ class LookBackDecoder(nn.Module):
         h, c = self.init_hidden_states(encoder_output)
         captions = [start_token]
         alphas = []
+        
+        # initial context vector
+        context_vector = encoder_output.mean(dim=1)
         while captions[-1] != end_token and len(captions) < 30:  # 1 is '.'
             caption = captions[-1]
             embedded_caption = self.embedding(torch.LongTensor([caption]).to(self.device))  # (1, embed_dim)

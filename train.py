@@ -6,13 +6,15 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from metric import bleu
+
 
 class Trainer:
     """
     Trainer for encoder and decoder
     """
 
-    def __init__(self, encoder, decoder, dataloader, val_dataloader, config):
+    def __init__(self, encoder, decoder, dataloader, val_dataloader, config, target_type='text'):
         """
         encoder: Encoder module
         decoder: Decoder module
@@ -27,6 +29,7 @@ class Trainer:
         self.decoder = decoder.to(self.device)
         self.dataloader = dataloader
         self.val_dataloader = val_dataloader
+        assert val_dataloader.batch_size == 1
 
         encoder_params = list(filter(lambda p: p.requires_grad, encoder.parameters()))
         decoder_params = list(filter(lambda p: p.requires_grad, decoder.parameters()))
@@ -42,7 +45,9 @@ class Trainer:
         self.log_every = config.log_every
         self.validation_freq = config.validation_freq
         
-        self.best_val_loss = 10000
+        self.target_type = target_type
+        
+        self.best_val_score = 0
         
         
     def train(self, num_epochs, checkpoint_path):
@@ -68,11 +73,11 @@ class Trainer:
             
             if self.curr_epoch % self.validation_freq == 0:
                 val_start = time.time()
-                val_loss = self.validate()
-                print("epoch {0}, validation loss: {1:.4f}, {2:.4f} seconds".format(self.curr_epoch, val_loss, time.time() - val_start))
-                if val_loss < self.best_val_loss:
-                    print("Best validation loss, saving model...")
-                    self.best_val_loss = val_loss
+                val_score = self.validate()
+                print("epoch {0}, validation score: {1:.4f}, {2:.4f} seconds".format(self.curr_epoch, val_score, time.time() - val_start))
+                if val_score > self.best_val_score:
+                    print("Best validation score, saving model...")
+                    self.best_val_score = val_score
                     self.save(checkpoint_path)
             
     def train_step(self, images, targets, lengths):
@@ -97,31 +102,46 @@ class Trainer:
         
         return ce_loss.item()
         
+        
     def validate(self):
         self.encoder.eval()
         self.decoder.eval()
         
-        total_loss = 0
-        with torch.no_grad():
-            for ix, (images, targets, lengths) in enumerate(self.val_dataloader):
-                images = images.to(self.device)
-                targets = targets.to(self.device)
-                
-                encoded_images = self.encoder(images)
-                predictions, alphas = self.decoder(encoded_images, targets)
-                predictions = predictions.transpose(1, 2)  # (batch_size, length, C) -> (batch_size, C, length)
-                
-                targets = targets[:, 1:]
-                targets = targets.to(self.device)
-                
-                ce_loss = self.criterion(predictions, targets)
-                mask = (targets > 0).type_as(ce_loss)
-                ce_loss = ((ce_loss * mask) / mask.sum()).sum()
-                
-                total_loss += ce_loss.item()
-                
-        self.encoder.train()
-        self.decoder.train()
+        # if target type is text, calculate bleu-1
+        if self.target_type == 'text':
+            actuals = []
+            preds = []
+            
+            total_loss = 0
+            with torch.no_grad():
+                for ix, (image, target, length) in enumerate(self.val_dataloader):
+                    image = image.to(self.device)
+                    target = target.to(self.device)
+                    
+                    encoded_image = self.encoder(image)
+                    prediction, alphas = self.decoder.generate_caption_greedily(encoded_image, 
+                                                                                 self.val_dataloader.dataset.vocab['<start>'],
+                                                                                 self.val_dataloader.dataset.vocab['<end>'])
+                    
+                    target = target[0, 1:-1]
+                    target = target.tolist()
+                    
+                    prediction = prediction[1:-1]
+                    
+                    actuals.append(target)
+                    preds.append(prediction)
+                    
+            bleu1 = bleu(actuals, preds, n=1)
+                    
+            self.encoder.train()
+            self.decoder.train()
+            
+            return bleu1
+        
+        # if target type is hashtag, calculate f1
+        elif self.target_type == 'hashtag':
+            # TODO
+            pass
         
         return total_loss / (ix + 1)
 

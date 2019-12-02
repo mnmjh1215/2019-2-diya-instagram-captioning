@@ -55,7 +55,7 @@ def main(args):
         train_dataloader = get_dataloader(JSON_FILES['train'], vocab, type=args.target_type, tokenize_fn=tokenize_fn,
                                           batch_size=Config.batch_size, num_workers=Config.num_workers, on_ram=args.load_image_on_ram)
         val_dataloader = get_dataloader(JSON_FILES['val'], vocab, type=args.target_type, tokenize_fn=tokenize_fn,
-                                        batch_size=Config.batch_size, num_workers=Config.num_workers, on_ram=args.load_image_on_ram,
+                                        batch_size=1, num_workers=Config.num_workers, on_ram=args.load_image_on_ram,
                                         shuffle=False)
         
         # prepare model
@@ -68,7 +68,7 @@ def main(args):
             decoder.load_embedding(load_pretrained_embedding(vocab).to(Config.device))
         
         # prepare trainer
-        trainer = Trainer(encoder, decoder, train_dataloader, val_dataloader, Config)
+        trainer = Trainer(encoder, decoder, train_dataloader, val_dataloader, Config, target_type=args.target_type)
         if args.checkpoint_load_path:
             # load checkpint
             trainer.load(args.checkpoint_load_path)
