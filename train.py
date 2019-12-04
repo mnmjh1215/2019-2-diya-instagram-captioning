@@ -5,6 +5,7 @@ import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from config import Config
 
 from metric import bleu
 
@@ -14,7 +15,8 @@ class Trainer:
     Trainer for encoder and decoder
     """
 
-    def __init__(self, encoder, decoder, dataloader, val_dataloader, config, target_type='text'):
+    def __init__(self, encoder, decoder, dataloader, val_dataloader, target_type='text',
+                 lr=Config.lr, log_every=Config.log_every, validation_freq=Config.validation_freq):
         """
         encoder: Encoder module
         decoder: Decoder module
@@ -22,8 +24,7 @@ class Trainer:
         config: config containing learning rates and other hyperparameters
         """
         # TODO
-        self.config = config
-        self.device = self.config.device
+        self.device = Config.device
 
         self.encoder = encoder.to(self.device)
         self.decoder = decoder.to(self.device)
@@ -35,15 +36,15 @@ class Trainer:
         decoder_params = list(filter(lambda p: p.requires_grad, decoder.parameters()))
         trainable_params = encoder_params + decoder_params
         
-        self.optimizer = optim.Adam(params=trainable_params, lr=config.lr)
+        self.optimizer = optim.Adam(params=trainable_params, lr=lr)
         
         self.criterion = nn.CrossEntropyLoss(reduction='none').to(self.device)
         
         self.loss_hist = []
         self.curr_epoch = 0
         
-        self.log_every = config.log_every
-        self.validation_freq = config.validation_freq
+        self.log_every = log_every
+        self.validation_freq = validation_freq
         
         self.target_type = target_type
         
@@ -152,6 +153,7 @@ class Trainer:
                 'optimizer_state_dict': self.optimizer.state_dict(),
                 'epoch': self.curr_epoch,
                 'loss_hist': self.loss_hist,
+                'best_val_score': self.best_val_score
             }, savepath)
         
     
@@ -162,3 +164,4 @@ class Trainer:
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.curr_epoch = checkpoint['epoch']
         self.loss_hist = checkpoint['loss_hist']
+        self.best_val_score = checkpoint['best_val_score']

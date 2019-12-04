@@ -10,7 +10,14 @@ import subprocess
 import jpype
 import json
 from konlpy import jvm
+from konlpy.tag import Okt
 from collections import Counter
+
+
+okt = Okt()
+def tokenize_fn(text):
+    tokens = okt.pos(text, norm=True, join=True)
+    return tokens
 
 
 class OktDetokenizer:
