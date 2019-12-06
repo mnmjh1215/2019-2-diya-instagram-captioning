@@ -6,7 +6,11 @@ from train import Trainer
 from dataloader import get_dataloader
 from config import Config
 from utils import generate_vocab, OktDetokenizer, load_model, load_pretrained_embedding, tokenize_fn
+from metric import avg_f1_score, avg_bleu, avg_rouge_l, avg_meteor
 from konlpy.tag import Okt
+import torch
+
+from tqdm import tqdm
 
 import json
 import os
@@ -41,7 +45,9 @@ def main(args):
                         targets.extend(tokens)
             vocab = generate_vocab(targets, args.vocab_min_freq)
                 
-            with open(args.target_type + "_vocab_{0}.json".format(args.vocab_min_freq), "w") as fw:
+            if not os.path.isdir('vocabs/'):
+                os.mkdir('vocabs/')
+            with open("vocabs/" + args.target_type + "_vocab_{0}.json".format(args.vocab_min_freq), "w") as fw:
                 json.dump(vocab, fw)
         
         # prepare dataloader
@@ -81,20 +87,132 @@ def main(args):
             
         # train!
         print("Start Training using device {0}".format(Config.device))      
-        if not os.path.isdir(os.path.dirname(args.checkpoint_save_path)):
-            os.makedirs(os.path.dirname(args.checkpoint_save_path))
-        trainer.train(args.num_epochs, args.checkpoint_save_path)
+        if not os.path.isdir('checkpoint/'):
+            os.makedirs('checkpoint/')
+            
+        checkpoint_save_path = "checkpoint/{0}_{1}_{2}.pth".format(args.model, args.target_type, args.vocab_min_freq)
+        trainer.train(args.num_epochs, checkpoint_save_path)
         
         
     # test
     else:
-        # TODO: 모델이 주어지면 해당 모델로 테스트셋에 inference를 실시하고, 여러 metric을 사용하여 결과 측정.
-        pass
+        assert args.vocab_file is not None
+        assert args.checkpoint_load_path is not None
+        
+        print("Loading vocab...")
+        with open(args.vocab_file) as fr:
+            vocab = json.load(fr)
+            
+        print("Loading model...")
+        if args.model == 'showatt':
+            encoder = Encoder(Config.encoded_size)
+            decoder = Decoder(Config.encoder_dim, Config.decoder_dim, Config.attention_dim, Config.embed_dim, len(vocab))
+        elif args.model == 'ours':
+            encoder = ResNextEncoder(Config.encoded_size)
+            decoder = LookBackDecoder(Config.encoder_dim, Config.decoder_dim, Config.attention_dim, Config.embed_dim, len(vocab))
+        elif args.model == 'ablation_resnext':
+            encoder = ResNextEncoder(Config.encoded_size)
+            decoder = Decoder(Config.encoder_dim, Config.decoder_dim, Config.attention_dim, Config.embed_dim, len(vocab))
+        else:
+            # ablation_lookback
+            encoder = Encoder(Config.encoded_size)
+            decoder = LookBackDecoder(Config.encoder_dim, Config.decoder_dim, Config.attention_dim, Config.embed_dim, len(vocab))
+        
+        encoder.to(Config.device)
+        decoder.to(Config.device)
+        
+        load_model(encoder, decoder, args.checkpoint_load_path)
+        
+        test_dataloader = get_dataloader(JSON_FILES['test'], vocab, type=args.target_type, tokenize_fn=tokenize_fn,
+                                        batch_size=1, num_workers=Config.num_workers, on_ram=args.load_image_on_ram,
+                                        shuffle=False)
+        
+        print("Running test...")
+        if args.target_type == 'hashtag':
+            f1 = test_hashtag(encoder, decoder, test_dataloader)
+            print("avg F1: {0:.4f}".format(f1))
+        elif args.target_type == 'text':
+            bleu1, rouge_l, meteor = test_text(encoder, decoder, test_dataloader)
+            print('avg BLEU-1: {0:.4f}'.format(bleu1))
+            print('avg ROUGE-L: {0:.4f}'.format(rouge_l))
+            print('avg METEOR: {0:.4f}'.format(meteor))
 
+
+def test_text(encoder, decoder, test_dataloader):
+    # TODO: text의 각 metric의 결과를 리턴
+    actuals = []
+    preds = []
+    
+    encoder.eval()
+    decoder.eval()
+    with torch.no_grad():
+        for ix, (image, target, length) in tqdm(enumerate(test_dataloader)):
+            image = image.to(Config.device)
+            target = target.to(Config.device)
+            
+            encoded_image = encoder(image)
+            prediction, alphas = decoder.generate_caption_greedily(encoded_image, 
+                                                                   test_dataloader.dataset.vocab['<start>'],
+                                                                   test_dataloader.dataset.vocab['<end>'])
+            
+            target = target[0, 1:-1]
+            target = target.tolist()
+            
+            prediction = prediction[1:-1]
+            
+            actuals.append(target)
+            preds.append(prediction)
+    
+    print("Calculating BLEU-1")
+    avg_bleu1_score = avg_bleu(actuals, preds, n=1)
+    
+    print("Calculating ROUGE-L")
+    avg_rouge_l_score = avg_rouge_l(actuals, preds)
+    
+    print("Calculating METEOR")
+    avg_meteor_score = avg_meteor(actuals, preds)
+    
+    encoder.train()
+    decoder.train()
+    
+    return avg_bleu1_score, avg_rouge_l_score, avg_meteor_score
+
+
+def test_hashtag(encoder, decoder, test_dataloader):
+    # TODO: F1 제대로 계산한거 맞나...?
+    actuals = []
+    preds = []
+    
+    encoder.eval()
+    decoder.eval()
+    with torch.no_grad():
+        for ix, (image, target, length) in tqdm(enumerate(test_dataloader)):
+            image = image.to(Config.device)
+            target = target.to(Config.device)
+            
+            encoded_image = encoder(image)
+            prediction, alphas = decoder.generate_caption_greedily(encoded_image, 
+                                                                   test_dataloader.dataset.vocab['<start>'],
+                                                                   test_dataloader.dataset.vocab['<end>'])
+            
+            target = target[0, 1:-1]
+            target = target.tolist()
+            
+            prediction = prediction[1:-1]
+            
+            actuals.append(target)
+            preds.append(prediction)
+    
+    avg_f1 = avg_f1_score(actuals, preds)
+    
+    encoder.train()
+    decoder.train()
+    
+    return avg_f1
 
 
 def get_args():
-    parser = argparse.ArgumentParser("Train or test Show Attend and Tell model using instagram caption & hashtag data")
+    parser = argparse.ArgumentParser("Train or test showatt or our model using instagram caption & hashtag data")
 
     parser.add_argument('model',
                         default='showatt',
@@ -114,10 +232,6 @@ def get_args():
     parser.add_argument('--checkpoint_load_path',
                         default=None,
                         help="checkpoint for either training or testing. Required for testing")
-    
-    parser.add_argument('--checkpoint_save_path',
-                        default=Config.checkpoint_path,
-                        help="path to save checkpoint while training")
     
     parser.add_argument('--vocab_file',
                         default=None,

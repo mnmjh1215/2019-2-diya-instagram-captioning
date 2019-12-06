@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 from config import Config
 
-from metric import bleu
+from metric import avg_bleu, avg_f1_score
 
 
 class Trainer:
@@ -108,43 +108,41 @@ class Trainer:
         self.encoder.eval()
         self.decoder.eval()
         
+        actuals = []
+        preds = []
+        
+        with torch.no_grad():
+            for ix, (image, target, length) in enumerate(self.val_dataloader):
+                image = image.to(self.device)
+                target = target.to(self.device)
+                
+                encoded_image = self.encoder(image)
+                prediction, alphas = self.decoder.generate_caption_greedily(encoded_image, 
+                                                                                self.val_dataloader.dataset.vocab['<start>'],
+                                                                                self.val_dataloader.dataset.vocab['<end>'])
+                
+                target = target[0, 1:-1]
+                target = target.tolist()
+                
+                prediction = prediction[1:-1]
+                
+                actuals.append(target)
+                preds.append(prediction)
+                
+        self.encoder.train()
+        self.decoder.train()
+        
         # if target type is text, calculate bleu-1
-        if self.target_type == 'text':
-            actuals = []
-            preds = []
-            
-            total_loss = 0
-            with torch.no_grad():
-                for ix, (image, target, length) in enumerate(self.val_dataloader):
-                    image = image.to(self.device)
-                    target = target.to(self.device)
-                    
-                    encoded_image = self.encoder(image)
-                    prediction, alphas = self.decoder.generate_caption_greedily(encoded_image, 
-                                                                                 self.val_dataloader.dataset.vocab['<start>'],
-                                                                                 self.val_dataloader.dataset.vocab['<end>'])
-                    
-                    target = target[0, 1:-1]
-                    target = target.tolist()
-                    
-                    prediction = prediction[1:-1]
-                    
-                    actuals.append(target)
-                    preds.append(prediction)
-                    
-            bleu1 = bleu(actuals, preds, n=1)
-                    
-            self.encoder.train()
-            self.decoder.train()
+        if self.target_type == 'text':     
+            bleu1 = avg_bleu(actuals, preds, n=1)
             
             return bleu1
         
         # if target type is hashtag, calculate f1
         elif self.target_type == 'hashtag':
-            # TODO
-            pass
-        
-        return total_loss / (ix + 1)
+            avg_f1 = avg_f1_score(actuals, preds)
+            
+            return avg_f1
 
     def save(self, savepath):
         torch.save({

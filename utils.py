@@ -85,7 +85,7 @@ def load_pretrained_embedding(vocab):
 
 
 def load_model(encoder, decoder, checkpoint_path):
-    checkpoint = torch.load(checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, map_location=Config.device)
     encoder.load_state_dict(checkpoint['encoder_state_dict'])
     decoder.load_state_dict(checkpoint['decoder_state_dict'])
 
