@@ -129,19 +129,20 @@ def main(args):
         
         print("Running test...")
         if args.target_type == 'hashtag':
-            f1 = test_hashtag(encoder, decoder, test_dataloader)
+            f1 = test_hashtag(encoder, decoder, test_dataloader, vocab)
             print("avg F1: {0:.4f}".format(f1))
         elif args.target_type == 'text':
-            bleu1, rouge_l, meteor = test_text(encoder, decoder, test_dataloader)
+            bleu1, rouge_l, meteor = test_text(encoder, decoder, test_dataloader, vocab)
             print('avg BLEU-1: {0:.4f}'.format(bleu1))
             print('avg ROUGE-L: {0:.4f}'.format(rouge_l))
             print('avg METEOR: {0:.4f}'.format(meteor))
 
 
-def test_text(encoder, decoder, test_dataloader):
+def test_text(encoder, decoder, test_dataloader, vocab):
     # TODO: text의 각 metric의 결과를 리턴
-    actuals = []
+    actuals = test_dataloader.dataset.tokens
     preds = []
+    idx2word = dict([(v, k) for k, v in vocab.items()])
     
     encoder.eval()
     decoder.eval()
@@ -159,6 +160,7 @@ def test_text(encoder, decoder, test_dataloader):
             target = target.tolist()
             
             prediction = prediction[1:-1]
+            prediction = [idx2word[idx] for idx in prediction]
             
             actuals.append(target)
             preds.append(prediction)
@@ -178,10 +180,11 @@ def test_text(encoder, decoder, test_dataloader):
     return avg_bleu1_score, avg_rouge_l_score, avg_meteor_score
 
 
-def test_hashtag(encoder, decoder, test_dataloader):
+def test_hashtag(encoder, decoder, test_dataloader, vocab):
     # TODO: F1 제대로 계산한거 맞나...?
-    actuals = []
+    actuals = test_dataloader.dataset.tokens
     preds = []
+    idx2word = dict([(v, k) for k, v in vocab.items()])
     
     encoder.eval()
     decoder.eval()
@@ -199,8 +202,8 @@ def test_hashtag(encoder, decoder, test_dataloader):
             target = target.tolist()
             
             prediction = prediction[1:-1]
+            prediction = [idx2word[idx] for idx in prediction]
             
-            actuals.append(target)
             preds.append(prediction)
     
     avg_f1 = avg_f1_score(actuals, preds)

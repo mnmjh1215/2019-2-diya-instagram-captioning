@@ -80,15 +80,18 @@ class DGUDataset(Dataset):
                     
         # target 미리 생성
         self.targets = []
+        self.tokens = []
         for item in self.json:
             if type == 'text':
                 text = item['text']
                 tokens = self.tokenize_fn(text)
+                self.tokens.append(tokens)
                 UNK_idx = self.vocab['<UNK>']
                 target = [self.vocab.get(token, UNK_idx) for token in tokens]
             elif type == 'hashtag':
                 # 해시태그의 경우, vocab에 존재하지 않으면 그냥 무시
                 hashtags = item['hashtag']
+                self.tokens.append(hashtags)
                 target = [self.vocab.get(hashtag) for hashtag in hashtags if hashtag in self.vocab]
             self.targets.append(target)
         

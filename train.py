@@ -30,6 +30,8 @@ class Trainer:
         self.decoder = decoder.to(self.device)
         self.dataloader = dataloader
         self.val_dataloader = val_dataloader
+        self.vocab = dataloader.datset.vocab
+        self.idx2word = dict([(v, k) for k, v in self.vocab.items()])
         assert val_dataloader.batch_size == 1
 
         encoder_params = list(filter(lambda p: p.requires_grad, encoder.parameters()))
@@ -108,7 +110,7 @@ class Trainer:
         self.encoder.eval()
         self.decoder.eval()
         
-        actuals = []
+        actuals = self.val_dataloader.dataset.tokens
         preds = []
         
         with torch.no_grad():
@@ -125,8 +127,7 @@ class Trainer:
                 target = target.tolist()
                 
                 prediction = prediction[1:-1]
-                
-                actuals.append(target)
+                prediction = [self.idx2word[idx] for idx in prediction]
                 preds.append(prediction)
                 
         self.encoder.train()
