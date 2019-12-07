@@ -30,7 +30,7 @@ class Trainer:
         self.decoder = decoder.to(self.device)
         self.dataloader = dataloader
         self.val_dataloader = val_dataloader
-        self.vocab = dataloader.datset.vocab
+        self.vocab = dataloader.dataset.vocab
         self.idx2word = dict([(v, k) for k, v in self.vocab.items()])
         assert val_dataloader.batch_size == 1
 
