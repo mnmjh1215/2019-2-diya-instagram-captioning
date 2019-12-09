@@ -1,7 +1,7 @@
 
 
 from models.show_att import Encoder, Decoder
-from models.ours import ResNextEncoder, LookBackDecoder
+from models.resnext_lb import ResNextEncoder, LookBackDecoder
 from train import Trainer
 from dataloader import get_dataloader
 from config import Config
@@ -60,14 +60,15 @@ def main(args):
         
         # prepare model
         print("Loading Model")
+        print(args.model)
         
         if args.model == 'showatt':
             encoder = Encoder(Config.encoded_size)
             decoder = Decoder(Config.encoder_dim, Config.decoder_dim, Config.attention_dim, Config.embed_dim, len(vocab))
-        elif args.model == 'ours':
+        elif args.model == 'resnext_lb':
             encoder = ResNextEncoder(Config.encoded_size)
             decoder = LookBackDecoder(Config.encoder_dim, Config.decoder_dim, Config.attention_dim, Config.embed_dim, len(vocab))
-        elif args.model == 'ablation_resnext':
+        elif args.model == 'resnext':
             encoder = ResNextEncoder(Config.encoded_size)
             decoder = Decoder(Config.encoder_dim, Config.decoder_dim, Config.attention_dim, Config.embed_dim, len(vocab))
         else:
@@ -78,7 +79,7 @@ def main(args):
         if args.target_type == 'text':
             # load pretrained embedding
             decoder.load_embedding(load_pretrained_embedding(vocab).to(Config.device))
-        
+            
         # prepare trainer
         trainer = Trainer(encoder, decoder, train_dataloader, val_dataloader, target_type=args.target_type, lr=args.lr)
         if args.checkpoint_load_path:
@@ -104,24 +105,28 @@ def main(args):
             vocab = json.load(fr)
             
         print("Loading model...")
+        print(args.model)
         if args.model == 'showatt':
             encoder = Encoder(Config.encoded_size)
             decoder = Decoder(Config.encoder_dim, Config.decoder_dim, Config.attention_dim, Config.embed_dim, len(vocab))
-        elif args.model == 'ours':
+        elif args.model == 'resnext_lb':
             encoder = ResNextEncoder(Config.encoded_size)
             decoder = LookBackDecoder(Config.encoder_dim, Config.decoder_dim, Config.attention_dim, Config.embed_dim, len(vocab))
-        elif args.model == 'ablation_resnext':
+        elif args.model == 'resnext':
             encoder = ResNextEncoder(Config.encoded_size)
             decoder = Decoder(Config.encoder_dim, Config.decoder_dim, Config.attention_dim, Config.embed_dim, len(vocab))
         else:
-            # ablation_lookback
+            # lookback
             encoder = Encoder(Config.encoded_size)
             decoder = LookBackDecoder(Config.encoder_dim, Config.decoder_dim, Config.attention_dim, Config.embed_dim, len(vocab))
         
-        encoder.to(Config.device)
-        decoder.to(Config.device)
+        encoder = encoder.to(Config.device)
+        decoder = decoder.to(Config.device)
         
         load_model(encoder, decoder, args.checkpoint_load_path)
+        
+        encoder.eval()
+        decoder.eval()
         
         test_dataloader = get_dataloader(JSON_FILES['test'], vocab, type=args.target_type, tokenize_fn=tokenize_fn,
                                         batch_size=1, num_workers=Config.num_workers, on_ram=args.load_image_on_ram,
@@ -129,8 +134,10 @@ def main(args):
         
         print("Running test...")
         if args.target_type == 'hashtag':
-            f1 = test_hashtag(encoder, decoder, test_dataloader, vocab)
+            f1, prec, rec = test_hashtag(encoder, decoder, test_dataloader, vocab)
             print("avg F1: {0:.4f}".format(f1))
+            print('avg Precision: {0:.4f}'.format(prec))
+            print('avg Recall: {0:.4f}'.format(rec))
         elif args.target_type == 'text':
             bleu1, rouge_l, meteor = test_text(encoder, decoder, test_dataloader, vocab)
             print('avg BLEU-1: {0:.4f}'.format(bleu1))
@@ -174,9 +181,6 @@ def test_text(encoder, decoder, test_dataloader, vocab):
     print("Calculating METEOR")
     avg_meteor_score = avg_meteor(actuals, preds)
     
-    encoder.train()
-    decoder.train()
-    
     return avg_bleu1_score, avg_rouge_l_score, avg_meteor_score
 
 
@@ -206,21 +210,18 @@ def test_hashtag(encoder, decoder, test_dataloader, vocab):
             
             preds.append(prediction)
     
-    avg_f1 = avg_f1_score(actuals, preds)
+    avg_f1, avg_prec, avg_rec = avg_f1_score(actuals, preds)
     
-    encoder.train()
-    decoder.train()
-    
-    return avg_f1
+    return avg_f1, avg_prec, avg_rec
 
 
 def get_args():
-    parser = argparse.ArgumentParser("Train or test showatt or our model using instagram caption & hashtag data")
+    parser = argparse.ArgumentParser("Train or test model using instagram caption & hashtag data")
 
     parser.add_argument('model',
                         default='showatt',
-                        choices=['showatt', 'ours', 'ablation_resnext', 'ablation_lb'],
-                        help="model to use, one of showatt, ours, ablation_resnext, ablation_lb")
+                        choices=['showatt', 'resnext_lb', 'resnext', 'lb'],
+                        help="model to use, one of showatt, resnext_lb, resnext, lb")
     
     parser.add_argument('mode',
                         default='train',

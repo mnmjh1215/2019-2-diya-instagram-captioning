@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class ResNextEncoder(nn.Module):
     """
     An encoder that encodes each input image to tensor with shape (L, D)
@@ -209,21 +210,25 @@ class LookBackDecoder(nn.Module):
         :return: captions generated greedily
         """
         # TODO
+        self.eval()
         h, c = self.init_hidden_states(encoder_output)
         captions = [start_token]
         alphas = []
         
         # initial context vector
         context_vector = encoder_output.mean(dim=1)
-        while captions[-1] != end_token and len(captions) < 30:  # 1 is '.'
-            caption = captions[-1]
-            embedded_caption = self.embedding(torch.LongTensor([caption]).to(self.device))  # (1, embed_dim)
-            context_vector, alpha = self.look_back_attention(encoder_output, h, context_vector)  # (1, encoder_dim)
-            h, c = self.lstm(torch.cat([embedded_caption, context_vector], dim=1),
-                             (h, c))
-            preds = self.deep_output_layer(embedded_caption, h, context_vector)  # (1, vocab_size)
-            next_word = int(torch.argmax(preds, dim=1, keepdim=True).squeeze())
-            captions.append(next_word)
-            alphas.append(alpha)
+        with torch.no_grad():
+            while captions[-1] != end_token and len(captions) < 30:  # 1 is '.'
+                caption = captions[-1]
+                embedded_caption = self.embedding(torch.LongTensor([caption]).to(self.device))  # (1, embed_dim)
+                context_vector, alpha = self.look_back_attention(encoder_output, h, context_vector)  # (1, encoder_dim)
+                h, c = self.lstm(torch.cat([embedded_caption, context_vector], dim=1),
+                                (h, c))
+                preds = self.deep_output_layer(embedded_caption, h, context_vector)  # (1, vocab_size)
+                next_word = int(torch.argmax(preds, dim=1, keepdim=True).squeeze())
+                captions.append(next_word)
+                alphas.append(alpha)
+        
+        self.train()
 
         return captions, alphas
