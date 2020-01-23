@@ -53,9 +53,9 @@ def main(args):
         # prepare dataloader
         print("Loading DataLoader")
         train_dataloader = get_dataloader(JSON_FILES['train'], vocab, type=args.target_type, tokenize_fn=tokenize_fn,
-                                          batch_size=Config.batch_size, num_workers=Config.num_workers, on_ram=args.load_image_on_ram)
+                                          batch_size=args.batch_size, num_workers=Config.num_workers, load_on_ram=args.load_image_on_ram)
         val_dataloader = get_dataloader(JSON_FILES['val'], vocab, type=args.target_type, tokenize_fn=tokenize_fn,
-                                        batch_size=1, num_workers=Config.num_workers, on_ram=args.load_image_on_ram,
+                                        batch_size=1, num_workers=Config.num_workers, load_on_ram=args.load_image_on_ram,
                                         shuffle=False)
         
         # prepare model
@@ -129,7 +129,7 @@ def main(args):
         decoder.eval()
         
         test_dataloader = get_dataloader(JSON_FILES['test'], vocab, type=args.target_type, tokenize_fn=tokenize_fn,
-                                        batch_size=1, num_workers=Config.num_workers, on_ram=args.load_image_on_ram,
+                                        batch_size=1, num_workers=Config.num_workers, load_on_ram=args.load_image_on_ram,
                                         shuffle=False)
         
         print("Running test...")
@@ -146,7 +146,7 @@ def main(args):
 
 
 def test_text(encoder, decoder, test_dataloader, vocab):
-    # TODO: text의 각 metric의 결과를 리턴
+    # text의 각 metric의 결과를 리턴
     actuals = test_dataloader.dataset.tokens
     preds = []
     idx2word = dict([(v, k) for k, v in vocab.items()])
@@ -185,7 +185,7 @@ def test_text(encoder, decoder, test_dataloader, vocab):
 
 
 def test_hashtag(encoder, decoder, test_dataloader, vocab):
-    # TODO: F1 제대로 계산한거 맞나...?
+    # F1 제대로 계산한거 맞나...?
     actuals = test_dataloader.dataset.tokens
     preds = []
     idx2word = dict([(v, k) for k, v in vocab.items()])
@@ -250,6 +250,11 @@ def get_args():
                         default=Config.num_epochs,
                         type=int,
                         help="number of epochs to train")
+    
+    parser.add_argument('--batch_size',
+                        default=Config.batch_size,
+                        type=int,
+                        help="batch size to be used while training")
     
     parser.add_argument('--lr',
                         default=Config.lr,
